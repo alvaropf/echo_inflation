@@ -3,11 +3,14 @@
 A one-page US CPI scenario model running on live official data, with outside forecasts shown alongside for comparison.
 
 ```
-public/index.html   the page (simulation runs in the browser)
-api/data.js         Vercel serverless function: fetches every source, returns one JSON
-lib/sources.js      fetchers + parsers, one per source
+public/index.html   the page
+public/app.js       page logic
+public/model.js     the forecast engine, shared by the page and the backtest
+api/data.js         GET /api/data: live inputs from every source (cached 1 hour)
+api/backtest.js     GET /api/backtest: real-time track record (cached 1 day)
+lib/sources.js      fetchers + parsers, one per source (incl. ALFRED vintages)
 lib/derive.js       builds the monthly panel: components, weights, seasonal factors, trailing paces
-test/run.mjs        offline pipeline test (not deployed)
+test/run.mjs        offline tests, including a look-ahead check (not deployed)
 ```
 
 ## Deploy to Vercel
@@ -18,11 +21,24 @@ test/run.mjs        offline pipeline test (not deployed)
 
 | Variable | Needed? | Where to get it |
 |---|---|---|
-| `FRED_API_KEY` | Recommended | Free from https://fred.stlouisfed.org/docs/api/api_key.html. Without it, the app falls back to FRED's public CSV download, which works but is less reliable from cloud servers. |
+| `FRED_API_KEY` | **Required for the track record** | Free from https://fred.stlouisfed.org/docs/api/api_key.html. The backtest reads archived data vintages (ALFRED), which only the API serves. Without it the main page still works from FRED's public CSV, but there is no track record and no error band. |
 | `EIA_API_KEY` | Optional | Free from https://www.eia.gov/opendata/register.php. Sets the oil dial to the EIA's WTI forecast. Without it, the dial starts at today's spot price. |
 | `CONTACT_EMAIL` | Recommended | Your email address. It goes in the User-Agent header, which BLS asks automated clients to include. |
 
 3. Redeploy. `GET /api/data` is cached at Vercel's edge for 1 hour, and a stale copy is served for up to a day while it refreshes. Data sources are queried at most once an hour, however many people visit.
+
+## Track record and error band
+
+`/api/backtest` re-runs the model for every month since June 2016 as if it were that CPI release day:
+
+- CPI and its components exactly as published on that date (ALFRED vintages, including later seasonal revisions not yet made)
+- the BLS weights table that was public at the time
+- dials set by the same data rule the page uses (`dataDefaults` in `public/model.js`)
+- the Cleveland Fed nowcast as it stood that day, for the "nowcast start" variant
+
+It compares each forecast with the official rate that followed and reports the typical miss at 1–12 months against "no change", the Cleveland Fed nowcast and the SPF. The page's shaded band is the range that held 80% of those errors. The nowcast start is on by default only if it lowered the 1–2 month error in this record.
+
+Known limits, also listed on the page: the oil dial is held at spot (EIA forecast vintages aren't available), and Zillow rents use today's history because Zillow doesn't publish vintages.
 
 ## Data sources
 
@@ -45,4 +61,4 @@ If any of the core CPI series fails, the page shows the error and a source-statu
 
 ## Test
 
-`npm test` runs the whole pipeline offline against test inputs in each source's wire format. It checks that the derived services-ex-shelter series matches its known value and that contributions add up to the headline.
+`npm install && npm test` runs both endpoints offline against test inputs in each source's wire format. It checks that the derived services-ex-shelter series matches its known value, that a perfect nowcast reproduces the official rate, and that **no backtest forecast changes when data published after its date is altered** (the look-ahead check).

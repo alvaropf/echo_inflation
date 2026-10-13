@@ -70,6 +70,10 @@ th.num, td.num{text-align:right}
 tr.total td{font-weight:700}
 .st{font-weight:700} .st.ok{color:var(--ok)} .st.bad{color:var(--bad)}
 .err{font-size:12px; color:var(--muted)}
+.opts{display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; font-size:13px}
+.opts label{display:inline-flex; align-items:center; gap:6px}
+select{font:inherit; font-size:13px; background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:3px 6px}
+td.best{font-weight:800; color:var(--base)}
 .steps{font-size:14px} .steps li{margin:0 0 10px 18px}
 .steps code{font-family:inherit; font-weight:700; background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:1px 6px}
 #loading{padding:60px 0; text-align:center; color:var(--muted)}
@@ -84,7 +88,7 @@ footer{color:var(--muted); font-size:12px; margin:20px 0 8px; text-align:center}
   <div class="chips">
     <div class="chip"><b id="chipNow">—</b><span id="chipNowL">inflation today</span></div>
     <div class="chip"><b id="chipMed">—</b><span id="chipMedL">in 12 months</span></div>
-    <div class="chip"><b id="chipRange">—</b>scenario range</div>
+    <div class="chip"><b id="chipRange">—</b><span id="chipRangeL">80% error band</span></div>
     <div class="chip verdict"><b id="chipDir">—</b>direction</div>
   </div>
   <div class="asof" id="asof"></div>
@@ -101,15 +105,37 @@ footer{color:var(--muted); font-size:12px; margin:20px 0 8px; text-align:center}
 
 <div class="panel">
   <h2>The path</h2>
-  <div class="note">Black: official CPI inflation (12-month change, not seasonally adjusted, as BLS reports it). Green: the model path from your dials, with a shaded scenario band. Amber dashed: what the number would do if prices kept rising at exactly last year's average pace. Any wiggle in that line is a pure base effect. Blue markers: the Cleveland Fed nowcast for the next prints, and outside 12-month forecasts placed at the end of the horizon.</div>
+  <div class="note">Black: official CPI inflation (12-month change, not seasonally adjusted, as BLS reports it). Green: the model path from your dials. Shaded: the range that held 80% of the model's real past errors at each horizon (see the track record below). Amber dashed: what the number would do if prices kept rising at exactly last year's average pace. Any wiggle in that line is a pure base effect. Blue markers: the Cleveland Fed nowcast for the next prints, and outside 12-month forecasts placed at the end of the horizon.</div>
   <div class="chartbox"><canvas id="fanChart"></canvas></div>
   <div class="legend">
     <span><i class="sw" style="background:var(--hist)"></i>official CPI</span>
     <span><i class="sw" style="background:var(--base)"></i>model path</span>
-    <span><i class="sw" style="background:var(--lo);height:9px"></i>scenario band</span>
+    <span><i class="sw" style="background:var(--lo);height:9px"></i>80% of past errors</span>
     <span><i class="sw dash"></i>last year's pace held</span>
     <span><i class="dot" style="background:var(--ref)"></i>nowcast / outside forecasts</span>
   </div>
+  <div class="opts">
+    <label id="anchorWrap"><input type="checkbox" id="anchorT"> Start from the Cleveland Fed nowcast for <span id="anchorMonths"></span></label>
+    <label>Error band from <select id="sampleS"><option value="all">all years since 2016</option><option value="exPandemic">excluding 2020–22</option><option value="last3y">the last 3 years</option></select></label>
+  </div>
+  <div class="note" id="anchorNote" style="margin:6px 0 0"></div>
+</div>
+
+<div class="panel" id="trackPanel">
+  <h2>Track record</h2>
+  <div class="note" id="trackIntro">Computing the track record from archived data…</div>
+  <div class="tblwrap"><table id="trackTbl" style="display:none">
+    <thead><tr><th>Horizon</th><th class="num">Model + nowcast start</th><th class="num">Model alone</th><th class="num">No change</th><th class="num">Cleveland Fed nowcast</th><th class="num">SPF</th></tr></thead>
+    <tbody id="trackRows"></tbody>
+  </table></div>
+  <div class="chartbox short" id="trackBox" style="display:none;margin-top:14px"><canvas id="trackChart"></canvas></div>
+  <div class="legend" id="trackLegend" style="display:none">
+    <span><i class="sw" style="background:var(--hist)"></i>actual</span>
+    <span><i class="sw" style="background:var(--base)"></i>model, made 12 months earlier</span>
+    <span><i class="sw dash"></i>no change</span>
+    <span><i class="dot" style="background:var(--ref)"></i>SPF</span>
+  </div>
+  <ul class="err" id="trackNotes" style="margin:10px 0 0 18px"></ul>
 </div>
 
 <div class="panel">
@@ -177,6 +203,8 @@ footer{color:var(--muted); font-size:12px; margin:20px 0 8px; text-align:center}
       every other part runs at its dial pace.</li>
     <li><b>Headline monthly change = weighted sum of the parts.</b> The weights shift each month as relative prices change, the same way BLS relative importance moves through a year.</li>
     <li><b>Turn it into the reported number:</b> chain the seasonally adjusted index forward, multiply by each calendar month's seasonal factor (the latest observed ratio of the unadjusted to the adjusted index), then take the 12-month change. That gives the figure BLS publishes.</li>
+    <li><b>The first one or two months</b> can be pinned to the Cleveland Fed nowcast, which tracks daily gasoline prices. The gap between the nowcast and the model is spread evenly across the parts so they still add up. The track record decides whether this is on by default.</li>
+    <li><b>The error band is measured, not assumed.</b> Every month since 2016, the model is re-run using only the data published by that CPI release date (from FRED's ALFRED vintage archive), with the dials set by the same data rule the page uses. The band shows where 80% of those real errors fell at each horizon.</li>
     <li><b>Base effects</b> are what's left over: the 12-month rate depends as much on the month leaving the comparison as on the month coming in. Twelve months out, every current month has left, so the model's answer there is entirely your dials, which is why the outside forecasts above matter.</li>
   </ol>
 </div>
@@ -193,239 +221,6 @@ footer{color:var(--muted); font-size:12px; margin:20px 0 8px; text-align:center}
 
 <footer>ECHO · live data from BLS via FRED, Cleveland Fed, Philadelphia Fed, EIA, Zillow · a scenario tool, not investment advice</footer>
 
-<script>
-const NAMES={shelter:'Shelter', sxs:'Services ex-energy, ex-shelter', goods:'Core goods', food:'Food', ecom:'Energy goods (gasoline etc.)', eserv:'Energy services (electricity, gas)'};
-const COMPS=['shelter','sxs','goods','food','ecom','eserv'];
-const NF=12, MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const $=id=>document.getElementById(id);
-const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const a2m=a=>(Math.pow(1+a/100,1/12)-1)*100;
-const addM=(m,k)=>{const [y,mo]=m.split('-').map(Number);const t=y*12+mo-1+k;return Math.floor(t/12)+'-'+String(t%12+1).padStart(2,'0');};
-const lab=m=>MN[+m.slice(5)-1]+'-'+m.slice(2,4);
-const long=m=>MN[+m.slice(5)-1]+' '+m.slice(0,4);
-const pct=(v,d=1)=>v==null||!isFinite(v)?'—':v.toFixed(d)+'%';
-const fmtDate=d=>{if(!d)return '';const x=new Date(d+(d.length===10?'T00:00:00Z':''));return isNaN(x)?d:x.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});};
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-
-let D, P0, charts={};
-
-/* ---------- forward simulation ---------- */
-function oilPath(P){
-  const L=D.panel.last, cur=new Date().toISOString().slice(0,7), om=D.oil?.monthly||{};
-  const spot=D.oil?.spot?.value ?? P.oil;
-  const out=[om[L] ?? spot];
-  const kNow=Math.max(0,monthsBetween(L,cur));
-  for(let f=1;f<=NF;f++){
-    const m=addM(L,f);
-    if(f<kNow && om[m]!=null) out.push(om[m]);
-    else if(f===kNow) out.push(spot);
-    else { const h=f-kNow; out.push(spot*Math.pow(P.oil/spot,Math.min(h,12)/12)); }
-  }
-  return out;
-}
-function monthsBetween(a,b){const [y1,m1]=a.split('-').map(Number),[y2,m2]=b.split('-').map(Number);return (y2-y1)*12+(m2-m1);}
-
-function simulate(P, mode){
-  const p=D.panel, n=p.months.length-1;
-  const lv={}; COMPS.forEach(c=>lv[c]=p.levels[c].slice());
-  const H=p.levels.headline.slice(), N=p.nsa.slice();
-  let w={...p.weights};
-  const oil=oilPath(P);
-  const curSh=a2m(p.trailing.shelter3), termSh=a2m(P.rent), k=Math.log(2)/P.hl;
-  const trendM=a2m(p.trailing.headline12);
-  const months=p.months.slice();
-    for(let f=1;f<=NF;f++){
-    const m=addM(p.last,f); months.push(m);
-    let mm;
-    if(mode==='trend'){ mm=Object.fromEntries(COMPS.map(c=>[c,trendM])); }
-    else mm={
-      shelter: termSh+(curSh-termSh)*Math.exp(-k*f),
-      sxs:a2m(P.sxs), goods:a2m(P.goods), food:a2m(P.food), eserv:a2m(P.eserv),
-      ecom: P.beta*((oil[f]/oil[f-1]-1)*100)
-    };
-    const mH=COMPS.reduce((s,c)=>s+w[c]*mm[c],0);
-    COMPS.forEach(c=>{ lv[c].push(lv[c][lv[c].length-1]*(1+mm[c]/100)); w[c]=w[c]*(1+mm[c]/100)/(1+mH/100); });
-    H.push(H[H.length-1]*(1+mH/100));
-    N.push(H[H.length-1]*p.seasonal[m.slice(5)]);
-  }
-  const yoy=t=>(N[t]/N[t-12]-1)*100;
-  return {months, lv, H, N, yoy, oil, wEnd:w, n};
-}
-function scen(P,d){return simulate({...P, oil:P.oil*(1+0.2*d), rent:P.rent+1*d, sxs:P.sxs+0.75*d, goods:P.goods+0.75*d, food:P.food+0.75*d, eserv:P.eserv+2*d});}
-
-/* ---------- render ---------- */
-function readP(){return {oil:+$('sOil').value, rent:+$('sRent').value, sxs:+$('sSxs').value, goods:+$('sGoods').value, food:+$('sFood').value, eserv:+$('sEserv').value, hl:+$('sHl').value, beta:+$('sBeta').value};}
-function setP(P){ $('sOil').value=P.oil; $('sRent').value=P.rent; $('sSxs').value=P.sxs; $('sGoods').value=P.goods; $('sFood').value=P.food; $('sEserv').value=P.eserv; $('sHl').value=P.hl; $('sBeta').value=P.beta; }
-
-function refresh(){
-  const P=readP(), p=D.panel;
-  $('oOil').textContent='$'+P.oil; $('oRent').textContent=P.rent.toFixed(1)+'%'; $('oSxs').textContent=P.sxs.toFixed(1)+'%';
-  $('oGoods').textContent=P.goods.toFixed(1)+'%'; $('oFood').textContent=P.food.toFixed(1)+'%'; $('oEserv').textContent=P.eserv.toFixed(1)+'%';
-  $('oHl').textContent=P.hl+' mo'; $('oBeta').textContent=P.beta.toFixed(2);
-
-  const B=simulate(P), lo=scen(P,-1), hi=scen(P,1), T=simulate(P,'trend');
-  const n=B.n, E=n+NF, endM=B.months[E];
-  const now=B.yoy(n), end=B.yoy(E), loE=Math.min(lo.yoy(E),hi.yoy(E)), hiE=Math.max(lo.yoy(E),hi.yoy(E));
-  $('chipNow').textContent=pct(now); $('chipNowL').textContent='CPI inflation, '+long(p.last);
-  $('chipMed').textContent=pct(end); $('chipMedL').textContent='model, '+long(endM);
-  $('chipRange').textContent=loE.toFixed(1)+'–'+hiE.toFixed(1)+'%';
-  const d=end-now; $('chipDir').textContent=d<-0.3?'Lower ↓':d>0.3?'Higher ↑':'Sideways →';
-  $('thEnd').textContent='In 12 months ('+lab(endM)+')';
-
-  // component YoY
-  const cy=(S,c,t)=>(S.lv[c][t]/S.lv[c][t-12]-1)*100;
-  const enY=(S,t)=>{const we=p.weights.ecom, ws=p.weights.eserv; return (we*cy(S,'ecom',t)+ws*cy(S,'eserv',t))/(we+ws);};
-  const eNow=enY(B,n), eEnd=enY(B,E), eW=p.weights.ecom+p.weights.eserv, eDrag=eW*(eEnd-eNow);
-  const shNow=cy(B,'shelter',n), shEnd=cy(B,'shelter',E);
-
-  // base effects over next 6 months (trend-pace line)
-  const tr=[]; for(let f=1;f<=6;f++) tr.push({m:B.months[n+f], v:T.yoy(n+f)});
-  const tMin=tr.reduce((a,b)=>b.v<a.v?b:a), tMax=tr.reduce((a,b)=>b.v>a.v?b:a);
-  const hm=[]; for(let t=n-11;t<=n;t++) hm.push({m:p.months[t], v:p.mom.headline[t]});
-  const avg=hm.reduce((s,h)=>s+h.v,0)/12;
-  const out6=hm.slice(0,6), hot6=out6.filter(h=>h.v>avg+0.05), cold6=out6.filter(h=>h.v<avg-0.05);
-
-  const R=D.refs, refs=[];
-  if(R.expinf1y) refs.push(['Cleveland Fed 1-year expected',R.expinf1y.value]);
-  if(R.spf) refs.push(['SPF next 4 quarters',R.spf.fourQ]);
-
-  const ins=[];
-  const swing=Math.max(Math.abs(tMax.v-now),Math.abs(tMin.v-now));
-  ins.push(`<li class="amber"><b>Base effects over the next six months: ${swing<0.15?'small':'about '+swing.toFixed(1)+' points'}.</b> If prices kept rising at last year's average pace (${pct(p.trailing.headline12)} a year), reported inflation would still move between <b>${pct(tMin.v)}</b> (${lab(tMin.m)}) and <b>${pct(tMax.v)}</b> (${lab(tMax.m)}), purely because of which months drop out. ${hot6.length?`Hotter-than-average months leaving soon: <b>${hot6.map(h=>lab(h.m)).join(', ')}</b>.`:''} ${cold6.length?`Cooler months leaving, which push the rate up: <b>${cold6.map(h=>lab(h.m)).join(', ')}</b>.`:''}</li>`);
-  ins.push(`<li class="hot"><b>Energy: ${pct(eNow)} now → ${pct(eEnd)} by ${lab(endM)}.</b> With WTI at $${D.oil?.spot?.value?.toFixed(0) ?? '—'} today moving to $${P.oil} in a year, energy ${eDrag<0?'takes':'adds'} about <b>${Math.abs(eDrag).toFixed(2)} points</b> ${eDrag<0?'off':'to'} headline. Energy is only ${(eW*100).toFixed(1)}% of the basket, but it's the part that swings most.</li>`);
-  ins.push(`<li><b>Shelter is looking in the rearview mirror.</b> New leases are rising <b>${pct(P.rent)}</b> a year (Zillow, ${D.rent?long(D.rent.month):'n/a'}), while CPI shelter shows <b>${pct(shNow)}</b> because it averages over existing leases. At a ${P.hl}-month half-life it reaches <b>${pct(shEnd)}</b> by ${lab(endM)}. Shelter is ${(p.weights.shelter*100).toFixed(0)}% of CPI, so this is the slowest but most reliable force.</li>`);
-  ins.push(`<li><b>Services ex-shelter is the sticky part.</b> It has run at <b>${pct(p.trailing.sxs6)}</b> annualized over 6 months and <b>${pct(p.trailing.sxs12)}</b> over 12. The dial is at ${pct(P.sxs)}, and every 0.5-point change there moves the 12-month answer by about ${(0.5*p.weights.sxs).toFixed(2)} points.</li>`);
-  if(refs.length){ const gaps=refs.map(([k,v])=>`${k} <b>${pct(v)}</b>`).join(', ');
-    const mean=refs.reduce((s,r)=>s+r[1],0)/refs.length;
-    ins.push(`<li class="ref"><b>Against outside views:</b> ${gaps}. The model's ${pct(end)} sits <b>${Math.abs(end-mean).toFixed(1)} points ${end>mean?'above':'below'}</b> their average. ${Math.abs(end-mean)>0.75?'That gap is large, so check which dial is driving it.':'That is within normal disagreement.'}</li>`); }
-  ins.push(`<li><b>Bottom line:</b> from <b>${pct(now)}</b> (${long(p.last)}) to about <b>${pct(end)}</b> by ${long(endM)}, scenario range <b>${loE.toFixed(1)}–${hiE.toFixed(1)}%</b>. The range is a stress test of the dials, not a probability band.</li>`);
-  $('insights').innerHTML=ins.join('');
-
-  // table
-  let rows='', cN=0, cE=0;
-  const W0=p.weightsAt[n-12];   // weights at the start of the current 12-month window
-  const wAtEnd12=p.weights;     // the final window starts at the latest CPI month
-  for(const c of COMPS){
-    const yN=cy(B,c,n), yE=cy(B,c,E), kN=W0[c]*yN, kE=wAtEnd12[c]*yE; cN+=kN; cE+=kE;
-    rows+=`<tr><td>${NAMES[c]}</td><td class="num">${(p.weights[c]*100).toFixed(1)}%</td><td class="num">${pct(yN)}</td><td class="num">${pct(yE)}</td><td class="num">${kN.toFixed(2)} pp</td><td class="num">${kE.toFixed(2)} pp</td></tr>`;
-  }
-  const saN=(B.H[n]/B.H[n-12]-1)*100, saE=(B.H[E]/B.H[E-12]-1)*100;
-  rows+=`<tr class="total"><td>Sum = headline, seasonally adjusted</td><td class="num">100%</td><td class="num">${pct(saN,2)}</td><td class="num">${pct(saE,2)}</td><td class="num">${cN.toFixed(2)} pp</td><td class="num">${cE.toFixed(2)} pp</td></tr>`;
-  rows+=`<tr><td>Official headline (not seasonally adjusted)</td><td></td><td class="num">${pct(now,2)}</td><td class="num">${pct(end,2)}</td><td></td><td></td></tr>`;
-  $('compRows').innerHTML=rows;
-
-  drawCharts(B,lo,hi,T,hm,avg);
-}
-
-function drawCharts(B,lo,hi,T,hm,avg){
-  const p=D.panel, n=B.n, E=n+NF, first=n-23;
-  const idx=[]; for(let t=first;t<=E;t++) idx.push(t);
-  const labels=idx.map(t=>lab(B.months[t]));
-  const fwd=S=>idx.map(t=>t>=n?S.yoy(t):null);
-  const hist=idx.map(t=>t<=n?B.yoy(t):null);
-  const hiA=idx.map(t=>t>=n?Math.max(lo.yoy(t),hi.yoy(t)):null), loA=idx.map(t=>t>=n?Math.min(lo.yoy(t),hi.yoy(t)):null);
-  const point=(t,v)=>idx.map(x=>x===t?v:null);
-  const ext=[];
-  const R=D.refs;
-  (R.nowcast?.yoy||[]).forEach(r=>{ if(!r.month)return; const t=B.months.indexOf(r.month); if(t>n&&t<=E) ext.push({label:'Cleveland Fed nowcast '+lab(r.month),data:point(t,r.value),style:'circle'}); });
-  if(R.expinf1y) ext.push({label:'Cleveland Fed 1-yr expected',data:point(E,R.expinf1y.value),style:'triangle'});
-  if(R.spf) ext.push({label:'SPF next 4 quarters',data:point(E,R.spf.fourQ),style:'rectRot'});
-  if(R.mich1y) ext.push({label:'Michigan households 1-yr',data:point(E,R.mich1y.value),style:'crossRot'});
-
-  Object.values(charts).forEach(c=>c.destroy());
-  Chart.defaults.font.family='Archivo';
-  const grid=css('--line'), muted=css('--muted'), refC=css('--ref');
-  charts.fan=new Chart($('fanChart'),{type:'line',
-    data:{labels,datasets:[
-      {data:hiA,borderWidth:0,pointRadius:0,fill:false},
-      {data:loA,borderWidth:0,pointRadius:0,fill:'-1',backgroundColor:css('--lo')},
-      {label:'model path',data:fwd(B),borderColor:css('--base'),borderWidth:2.5,pointRadius:0,tension:0.25},
-      {label:"last year's pace held",data:fwd(T),borderColor:css('--ghost'),borderWidth:2,borderDash:[5,4],pointRadius:0,tension:0.25},
-      {label:'official CPI',data:hist,borderColor:css('--hist'),borderWidth:2.5,pointRadius:0,tension:0.25},
-      ...ext.map(e=>({label:e.label,data:e.data,showLine:false,pointStyle:e.style,pointRadius:6,pointHoverRadius:8,borderColor:refC,backgroundColor:refC,borderWidth:2}))
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,animation:false,spanGaps:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{legend:{display:false},tooltip:{filter:i=>i.datasetIndex>1&&i.parsed.y!=null,callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+'%'}}},
-      scales:{x:{grid:{display:false},ticks:{color:muted,maxTicksLimit:9,font:{size:11}}},
-        y:{grid:{color:grid},ticks:{color:muted,callback:v=>v.toFixed(1)+'%',font:{size:11}}}}}});
-
-  charts.roll=new Chart($('rollChart'),{type:'bar',
-    data:{labels:hm.map(h=>lab(h.m)),datasets:[{data:hm.map(h=>h.v),
-      backgroundColor:hm.map(h=>h.v>avg+0.05?css('--hot'):muted+'77'),borderRadius:3}]},
-    options:{responsive:true,maintainAspectRatio:false,animation:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>(c.parsed.y>=0?'+':'')+c.parsed.y.toFixed(2)+'% that month (avg '+avg.toFixed(2)+'%)'}}},
-      scales:{x:{grid:{display:false},ticks:{color:muted,font:{size:11}}},
-        y:{grid:{color:grid},ticks:{color:muted,callback:v=>v.toFixed(1)+'%',font:{size:11}}}}}});
-}
-
-/* ---------- static panels ---------- */
-function renderRefs(){
-  const R=D.refs, link=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
-  const card=(t,v,d,na)=>`<div class="ref${na?' na':''}"><div class="t">${t}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
-  const fred=id=>'https://fred.stlouisfed.org/series/'+id;
-  const c=[];
-  const nc=R.nowcast;
-  if(nc&&(nc.yoy||nc.mom)){
-    const nm=r=>r.month?long(r.month):esc(r.label);
-    const y=(nc.yoy||[]).map(r=>`${nm(r)}: <b>${pct(r.value,2)}</b> y/y`).join('<br>');
-    const m=(nc.mom||[]).map(r=>`${nm(r)}: ${pct(r.value,2)} m/m`).join('<br>');
-    c.push(card('Cleveland Fed inflation nowcast',nc.yoy?.length?pct(nc.yoy[nc.yoy.length-1].value,2):pct(nc.mom[nc.mom.length-1].value,2),`${y}${y&&m?'<br>':''}${m}<br>Daily model of the next CPI prints. ${link('https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting','Source')}`));
-  } else c.push(card('Cleveland Fed inflation nowcast','unavailable',`Couldn't read the data file today. ${link('https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting','See the page')}`,true));
-  c.push(R.expinf1y?card('Cleveland Fed 1-year expected inflation',pct(R.expinf1y.value,2),`Average CPI inflation over the next 12 months, from swaps, Treasury yields and surveys. ${fmtDate(R.expinf1y.date)} · ${link(fred('EXPINF1YR'),'FRED')}`):card('Cleveland Fed 1-year expected inflation','unavailable','',true));
-  c.push(R.spf?card('Survey of Professional Forecasters',pct(R.spf.fourQ,2),`Median headline CPI forecast, next 4 quarters (quarterly path ${R.spf.quarters.map(v=>v.toFixed(1)).join(' → ')}). Survey ${R.spf.survey} · ${link('https://www.philadelphiafed.org/surveys-and-data/real-time-data-research/survey-of-professional-forecasters','Philadelphia Fed')}`):card('Survey of Professional Forecasters','unavailable','',true));
-  c.push(R.be5y?card('5-year breakeven inflation',pct(R.be5y.value,2),`Average CPI inflation over 5 years priced in Treasury vs TIPS yields. Daily. 5y5y forward: ${R.fwd5y5y?pct(R.fwd5y5y.value,2):'—'}. ${fmtDate(R.be5y.date)} · ${link(fred('T5YIE'),'FRED')}`):card('5-year breakeven inflation','unavailable','',true));
-  c.push(R.mich1y?card('Michigan survey, households 1-year',pct(R.mich1y.value,1),`Median household expectation. Usually runs above actual CPI. ${fmtDate(R.mich1y.date)} · ${link(fred('MICH'),'FRED')}`):card('Michigan survey, households 1-year','unavailable','',true));
-  if(R.fomcPce?.length){const yrs=R.fomcPce.slice(0,3).map(r=>`${r.year}: ${pct(r.value,1)}`).join(' · ');
-    c.push(card('FOMC projections (PCE, not CPI)',pct(R.fomcPce[0].value,1),`Median Fed official, Q4-to-Q4 PCE inflation. ${yrs}. PCE usually runs a few tenths below CPI. ${link(fred('PCECTPIMD'),'FRED')}`));}
-  else c.push(card('FOMC projections (PCE)','unavailable','',true));
-  $('refs').innerHTML=c.join('');
-}
-
-function srcTable(list){
-  return list.map(s=>`<tr><td><a href="${s.url}" target="_blank" rel="noopener">${esc(s.name)}</a>${s.id?` <span class="err">${s.id}</span>`:''}${s.error?`<div class="err">${esc(s.error)}</div>`:''}</td><td><span class="st ${s.ok?'ok':'bad'}">${s.ok?(s.error?'fallback':'live'):'failed'}</span></td><td>${esc(s.asOf||'—')}</td></tr>`).join('');
-}
-
-function defaults(){
-  const p=D.panel, t=p.trailing;
-  let oil=D.oil?.spot?.value ?? 75, oilSrc='today\'s spot (no EIA forecast loaded)';
-  const steo=D.oil?.steo;
-  if(steo?.length){ const tgt=addM(new Date().toISOString().slice(0,7),12); let best=steo[steo.length-1];
-    for(const r of steo) if(r[0]<=tgt) best=r; oil=best[1]; oilSrc=`EIA forecast for ${long(best[0])}`; }
-  const rent=D.rent?.yoy ?? t.shelter12;
-  return {P:{oil:Math.round(oil), rent:+rent.toFixed(1), sxs:+t.sxs6.toFixed(1), goods:+t.goods6.toFixed(1), food:+t.food12.toFixed(1), eserv:+t.eserv12.toFixed(1), hl:12, beta:0.5}, oilSrc};
-}
-
-async function boot(){
-  try{
-    const r=await fetch('/api/data'); const j=await r.json();
-    if(!r.ok) throw Object.assign(new Error(j.error||('HTTP '+r.status)),{sources:j.sources});
-    D=j;
-  }catch(e){
-    $('loading').style.display='none'; $('fatal').style.display='block';
-    $('fatalMsg').textContent=e.message+'. The page shows no numbers rather than stale or invented ones.';
-    if(e.sources) $('fatalRows').innerHTML=srcTable(e.sources);
-    return;
-  }
-  const p=D.panel, df=defaults(); P0=df.P;
-  $('asof').innerHTML=`Latest CPI: <b>${long(p.last)}</b> · market data to ${fmtDate(D.oil?.spot?.date)} · refreshed ${new Date(D.generatedAt).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})}${p.gaps.length?` · missing BLS months filled by interpolation: ${p.gaps.map(long).join(', ')}`:''}`;
-  $('hOil').textContent=`Default: ${df.oilSrc}. WTI spot $${D.oil?.spot?.value?.toFixed(1) ?? '—'} on ${fmtDate(D.oil?.spot?.date)}.`;
-  $('hRent').textContent=D.rent?`Default: Zillow new-lease rents, ${pct(D.rent.yoy)} y/y in ${long(D.rent.month)}. CPI shelter is ${pct(p.trailing.shelter12)} y/y.`:'Zillow unavailable; defaulting to CPI shelter\'s own pace.';
-  $('hSxs').textContent=`Default: last 6 months annualized (${pct(p.trailing.sxs6)}); 12 months: ${pct(p.trailing.sxs12)}. The stickiest part of inflation.`;
-  $('hGoods').textContent=`Default: last 6 months annualized. 12 months: ${pct(p.trailing.goods12)}.`;
-  $('hFood').textContent=`Default: last 12 months.`;
-  $('hEserv').textContent=`Default: last 12 months. Driven by utility rates and natural gas, not crude oil.`;
-  setP(P0);
-  $('srcRows').innerHTML=srcTable(D.sources);
-  $('srcNote').innerHTML=`Fetched server-side and cached for an hour. Weights: BLS relative importance, December ${D.weights.year}${D.weights.fallback?' (bls.gov unreachable, so an embedded copy of the official table is used)':''}.`;
-  renderRefs();
-  $('loading').style.display='none'; $('app').style.display='block';
-  document.querySelectorAll('input[type=range]').forEach(el=>el.addEventListener('input',refresh));
-  $('reset').addEventListener('click',()=>{setP(P0);refresh();});
-  if(window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',refresh);
-  refresh();
-}
-boot();
-</script>
+<script type="module" src="./app.js"></script>
 </body>
 </html>

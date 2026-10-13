@@ -55,7 +55,7 @@ export async function collect(now = new Date()) {
   const pending = list => {
     if (!list) return list;
     const byMonth = new Map();
-    list.forEach(r => byMonth.set(r.month || r.label, r));
+    list.forEach(({ daily, ...r }) => byMonth.set(r.month || r.label, r));
     const all = [...byMonth.values()].sort((a, b) => String(a.month || '').localeCompare(String(b.month || '')));
     const after = all.filter(r => r.month && r.month > panel.last);
     return after.length ? after : all.slice(-2);
@@ -68,14 +68,14 @@ export async function collect(now = new Date()) {
     panel,
     weights: { year: weights.year, fallback: !!weights.fallback, url: weights.url, raw: weights, warning: weights.warning || null },
     oil: oil && { ...oil, steo: steo.ok ? steo.data : null },
-    rent: zori.ok ? zori.data : null,
+    rent: zori.ok ? { month: zori.data.month, level: zori.data.level, yoy: zori.data.yoy, series: zori.data.series } : null,
     refs: {
       expinf1y: M.EXPINF1YR.ok ? latest(M.EXPINF1YR.data) : null,
       be5y: M.T5YIE.ok ? latest(M.T5YIE.data) : null,
       fwd5y5y: M.T5YIFR.ok ? latest(M.T5YIFR.data) : null,
       mich1y: M.MICH.ok ? latest(M.MICH.data) : null,
       fomcPce: pce,
-      spf: spf.ok ? spf.data : null,
+      spf: spf.ok ? { survey: spf.data.survey, quarters: spf.data.quarters, fourQ: spf.data.fourQ } : null,
       nowcast: nc,
     },
     sources: summarize([...cpi, ...mkt, ri, zori, steo, nowcast, spf]),
