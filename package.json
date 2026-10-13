@@ -1,0 +1,15 @@
+{
+  "name": "echo-inflation",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ECHO: where is US CPI inflation going? Live data from FRED, BLS, Cleveland Fed, Philadelphia Fed, EIA and Zillow.",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "vercel dev",
+    "test": "node test/run.mjs"
+  },
+  "dependencies": {
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}
