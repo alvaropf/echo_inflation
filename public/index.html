@@ -367,8 +367,9 @@ function renderRefs(){
   const c=[];
   const nc=R.nowcast;
   if(nc&&(nc.yoy||nc.mom)){
-    const y=(nc.yoy||[]).map(r=>`${esc(r.label)}: <b>${pct(r.value,2)}</b> y/y`).join('<br>');
-    const m=(nc.mom||[]).map(r=>`${esc(r.label)}: ${pct(r.value,2)} m/m`).join('<br>');
+    const nm=r=>r.month?long(r.month):esc(r.label);
+    const y=(nc.yoy||[]).map(r=>`${nm(r)}: <b>${pct(r.value,2)}</b> y/y`).join('<br>');
+    const m=(nc.mom||[]).map(r=>`${nm(r)}: ${pct(r.value,2)} m/m`).join('<br>');
     c.push(card('Cleveland Fed inflation nowcast',nc.yoy?.length?pct(nc.yoy[nc.yoy.length-1].value,2):pct(nc.mom[nc.mom.length-1].value,2),`${y}${y&&m?'<br>':''}${m}<br>Daily model of the next CPI prints. ${link('https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting','Source')}`));
   } else c.push(card('Cleveland Fed inflation nowcast','unavailable',`Couldn't read the data file today. ${link('https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting','See the page')}`,true));
   c.push(R.expinf1y?card('Cleveland Fed 1-year expected inflation',pct(R.expinf1y.value,2),`Average CPI inflation over the next 12 months, from swaps, Treasury yields and surveys. ${fmtDate(R.expinf1y.date)} · ${link(fred('EXPINF1YR'),'FRED')}`):card('Cleveland Fed 1-year expected inflation','unavailable','',true));
