@@ -51,6 +51,16 @@ export async function collect(now = new Date()) {
   const M = Object.fromEntries(mkt.map(r => [r.id, r]));
 
   const oil = M.DCOILWTICO.ok ? oilMonthly(M.DCOILWTICO.data) : null;
+  // The nowcast file holds every month since 2013; keep only months still awaiting an official print.
+  const pending = list => {
+    if (!list) return list;
+    const byMonth = new Map();
+    list.forEach(r => byMonth.set(r.month || r.label, r));
+    const all = [...byMonth.values()].sort((a, b) => String(a.month || '').localeCompare(String(b.month || '')));
+    const after = all.filter(r => r.month && r.month > panel.last);
+    return after.length ? after : all.slice(-2);
+  };
+  const nc = nowcast.ok ? { mom: pending(nowcast.data.mom), yoy: pending(nowcast.data.yoy) } : null;
   const pce = M.PCECTPIMD.ok ? M.PCECTPIMD.data.filter(o => o[1] !== null).map(([d, v]) => ({ year: +d.slice(0, 4), value: v })) : null;
 
   return {
@@ -66,7 +76,7 @@ export async function collect(now = new Date()) {
       mich1y: M.MICH.ok ? latest(M.MICH.data) : null,
       fomcPce: pce,
       spf: spf.ok ? spf.data : null,
-      nowcast: nowcast.ok ? nowcast.data : null,
+      nowcast: nc,
     },
     sources: summarize([...cpi, ...mkt, ri, zori, steo, nowcast, spf]),
   };
